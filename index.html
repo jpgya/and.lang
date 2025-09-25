@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HTML/CSS/JS コンパイラ</title>
+<style>
+:root {
+  --bg: #0f1724;
+  --panel: #0b1220;
+  --muted: #9aa4b2;
+  --accent: #60a5fa;
+}
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, Segoe UI, Roboto, 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+  background: var(--bg);
+  color: #e6eef6;
+}
+body {
+  display: flex;
+  flex-direction: column;
+}
+.wrap {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 14px;
+  padding: 18px;
+  flex: 1;
+}
+.editor-panel {
+  background: var(--panel);
+  padding: 12px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+textarea#input {
+  flex: 1;
+  background: #071027;
+  color: #dbeafe;
+  border: 1px solid #0b2436;
+  padding: 12px;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 13px;
+  resize: none;
+}
+.controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+button {
+  background: var(--accent);
+  color: #05203a;
+  border: none;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+button.secondary {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.06);
+  color: var(--muted);
+}
+.right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.preview-card, .outputs {
+  background: var(--panel);
+  padding: 10px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.preview-card {
+  height: 60%;
+}
+.preview-card iframe {
+  flex: 1;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.4);
+}
+.outputs {
+  height: 38%;
+  gap: 8px;
+}
+.output-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.link {
+  background: #022033;
+  padding: 8px;
+  border-radius: 6px;
+  color: #9be7ff;
+  text-decoration: none;
+  font-family: monospace;
+}
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+pre.sample {
+  background: #071a2b;
+  padding: 8px;
+  border-radius: 6px;
+  color: #cfe8ff;
+  margin: 0;
+  font-size: 13px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="editor-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <strong>統合エディタ</strong>
+        <div class="hint">html~/css~/js~ のマーカーでセクションを分ける</div>
+      </div>
+      <div style="font-size:12px;color:var(--muted)">例: html~ css~ js~</div>
+    </div>
+    <textarea id="input" spellcheck="false">html~&lt;h1&gt;サンプル&lt;/h1&gt;&lt;p&gt;ボタンで色変更&lt;/p&gt;&lt;button id='btnPink'&gt;ピンク&lt;/button&gt;&lt;button id='btnBlue'&gt;ブルー&lt;/button&gt;
+css~body{font-family:sans-serif;text-align:center;padding:40px;transition:background 0.5s;}h1{color:coral;font-size:2rem;}button{margin:8px;padding:8px 16px;border:none;border-radius:8px;background:#60a5fa;color:#05203a;font-size:1rem;cursor:pointer;}button:hover{opacity:0.8;}
+js~document.addEventListener('DOMContentLoaded',()=>{document.getElementById('btnPink').addEventListener('click',()=>{document.body.style.background='pink'});document.getElementById('btnBlue').addEventListener('click',()=>{document.body.style.background='lightblue'});});</textarea>
+    <div class="controls">
+      <button id="compileBtn">コンパイルしてプレビュー</button>
+      <button id="downloadBtn" class="secondary">HTML/CSS/JSをダウンロード</button>
+      <button id="clearBtn" class="secondary">クリア</button>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="preview-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <strong>プレビュー</strong>
+        <div style="font-size:12px;color:var(--muted)">iframe を使用</div>
+      </div>
+      <iframe id="preview" sandbox="allow-scripts allow-same-origin"></iframe>
+    </div>
+
+    <div class="outputs">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <strong>出力 / ダウンロード</strong>
+        <div class="hint">生成された HTML/CSS/JS を個別に保存可能</div>
+      </div>
+      <div class="output-row">
+        <a id="htmlLink" class="link" href="#">HTML を表示</a>
+        <a id="downloadHtml" class="link" href="#">ダウンロード .html</a>
+      </div>
+      <div class="output-row">
+        <a id="cssLink" class="link" href="#">CSS を表示</a>
+        <a id="downloadCss" class="link" href="#">ダウンロード .css</a>
+      </div>
+      <div class="output-row">
+        <a id="jsLink" class="link" href="#">JS を表示</a>
+        <a id="downloadJs" class="link" href="#">ダウンロード .js</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function parseSections(src) {
+  const pattern = /(?:^|\n)\s*(html|css|js)~([\s\S]*?)(?=(?:\n\s*(?:html|css|js)~)|$)/gi;
+  let m;
+  const parts = { html: [], css: [], js: [] };
+  while ((m = pattern.exec(src)) !== null) {
+    const kind = m[1].toLowerCase();
+    let content = m[2];
+    parts[kind].push(content.replace(/^\n/, ''));
+  }
+  return {
+    html: parts.html.join('\n'),
+    css: parts.css.join('\n'),
+    js: parts.js.join('\n')
+  };
+}
+
+function makePreview(html, css, js) {
+  return `<!doctype html>\n<html>\n<head>\n<meta charset='utf-8'>\n<style>${css}</style>\n</head>\n<body>\n${html}\n<script>${js}<\/script>\n</body>\n</html>`;
+}
+
+function makeBlobUrl(text, mime) {
+  return URL.createObjectURL(new Blob([text], { type: mime }));
+}
+
+const input = document.getElementById('input');
+const compileBtn = document.getElementById('compileBtn');
+const preview = document.getElementById('preview');
+const htmlLink = document.getElementById('htmlLink');
+const cssLink = document.getElementById('cssLink');
+const jsLink = document.getElementById('jsLink');
+const downloadHtml = document.getElementById('downloadHtml');
+const downloadCss = document.getElementById('downloadCss');
+const downloadJs = document.getElementById('downloadJs');
+const downloadBtn = document.getElementById('downloadBtn');
+const clearBtn = document.getElementById('clearBtn');
+
+let latest = { html: '', css: '', js: '', htmlUrl: null, cssUrl: null, jsUrl: null };
+
+function compileAndShow() {
+  const sections = parseSections(input.value || '');
+  latest.html = sections.html;
+  latest.css = sections.css;
+  latest.js = sections.js;
+
+  const doc = makePreview(latest.html, latest.css, latest.js);
+  preview.srcdoc = doc;
+
+  if (latest.htmlUrl) URL.revokeObjectURL(latest.htmlUrl);
+  if (latest.cssUrl) URL.revokeObjectURL(latest.cssUrl);
+  if (latest.jsUrl) URL.revokeObjectURL(latest.jsUrl);
+
+  latest.htmlUrl = makeBlobUrl(doc, 'text/html');
+  latest.cssUrl = makeBlobUrl(latest.css, 'text/css');
+  latest.jsUrl = makeBlobUrl(latest.js, 'text/javascript');
+
+  htmlLink.href = latest.htmlUrl; htmlLink.target = '_blank';
+  cssLink.href = latest.cssUrl; cssLink.target = '_blank';
+  jsLink.href = latest.jsUrl; jsLink.target = '_blank';
+
+  downloadHtml.href = latest.htmlUrl; downloadHtml.download = 'output.html';
+  downloadCss.href = latest.cssUrl; downloadCss.download = 'styles.css';
+  downloadJs.href = latest.jsUrl; downloadJs.download = 'script.js';
+}
+
+compileBtn.addEventListener('click', compileAndShow);
+downloadBtn.addEventListener('click', () => {
+  if (!latest.htmlUrl) compileAndShow();
+  [[latest.htmlUrl,'output.html'], [latest.cssUrl,'styles.css'], [latest.jsUrl,'script.js']].forEach(([url,name]) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+});
+
+clearBtn.addEventListener('click', () => {
+  input.value = '';
+  preview.srcdoc = '';
+  if (latest.htmlUrl) URL.revokeObjectURL(latest.htmlUrl);
+  if (latest.cssUrl) URL.revokeObjectURL(latest.cssUrl);
+  if (latest.jsUrl) URL.revokeObjectURL(latest.jsUrl);
+  latest = { html:'', css:'', js:'', htmlUrl:null, cssUrl:null, jsUrl:null };
+});
+</script>
+</body>
+</html>
